@@ -1,0 +1,27 @@
+{
+  "layer": "primary",
+  "source": "sharepoint",
+  "found": true,
+  "error": null,
+  "subject": {
+    "id": "cloud-approvals-2026-09.xlsx",
+    "uri": "http://sharepoint-mock:8000/sites/compliance/Shared%20Documents/APS/cloud-approvals-2026-09.xlsx",
+    "title": "cloud-approvals-2026-09.xlsx",
+    "created_at": "2026-08-30T12:00:00Z",
+    "modified_at": "2026-09-24T12:00:00Z",
+    "modified_by": "K. Reviewer",
+    "text": null,
+    "owners": [
+      {"value": "Cloud Platform Eng", "source": "template"},
+      {"value": "Cloud Platform Eng", "source": "column:Owner Team"},
+      {"value": "J. Analyst", "source": "sp:Author"},
+      {"value": "K. Reviewer", "source": "sp:ModifiedBy"},
+      {"value": "C. Owner", "source": "sp:AssociatedOwnerGroup"}
+    ]
+  },
+  "values": {
+    "approved": {"value": "Yes", "found": true, "location": "sheet 'AITs', row 2, column 'Approved for Cloud'"},
+    "as_of": {"value": "2026-09-24", "found": true, "location": "sheet 'Info', cell B2"}
+  },
+  "raw": null
+}
