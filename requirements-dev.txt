@@ -1,0 +1,3 @@
+-r api/requirements.txt
+-r sharepoint-mock/requirements.txt
+pytest==9.1.1

@@ -1,0 +1,7 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["api", "sharepoint-mock"]
+markers = [
+    "component: needs the compose stack running",
+    "e2e: end-to-end against the compose stack",
+]
