@@ -1,1 +1,14 @@
-{"evidence": {"params": {}}}
+{
+  "evidence": {
+    "params": {
+      "freshness": { "within_days": 42 },
+      "cloud_approval": { "within_days": 42, "approved_value": "Yes" },
+      "cds_code_approval": {
+        "required_wording": "Approved for production deployment",
+        "approver_source": "sp:AssociatedOwnerGroup",
+        "gate_allow": "allow"
+      },
+      "policy_exception": {}
+    }
+  }
+}
