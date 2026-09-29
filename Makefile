@@ -21,7 +21,9 @@ test-component:
 	$(VENV)/bin/pytest -m component
 
 test-opa:
-	docker run --rm -v "$(CURDIR)/opa:/policies:ro" $(OPA_IMAGE) test /policies -v
+	docker run --rm -v "$(CURDIR)/opa:/policies:ro" $(OPA_IMAGE) fmt --list --fail /policies
+	docker run --rm -v "$(CURDIR)/opa:/policies:ro" $(OPA_IMAGE) check /policies/checks /policies/policies /policies/data /policies/tests
+	docker run --rm -v "$(CURDIR)/opa:/policies:ro" $(OPA_IMAGE) test -v /policies/checks /policies/policies /policies/data /policies/tests
 
 test-e2e:
 	$(VENV)/bin/pytest -m e2e
