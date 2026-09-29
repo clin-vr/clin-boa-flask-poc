@@ -1,0 +1,20 @@
+{
+  "control_id": "CTL-EXC-001",
+  "description": "Policy exception is unexpired and has compensating controls",
+  "policy": "policy_exception",
+  "owner": "Risk Office",
+  "params": { "exception_id": "EXC-001" },
+  "layers": [
+    {
+      "name": "primary", "kind": "detective",
+      "sources": [{
+        "collector": "sharepoint",
+        "ref": { "site": "/sites/compliance", "path": "/sites/compliance/Shared Documents/Exceptions/${exception_id}.docx" },
+        "selectors": {
+          "expiry": { "text_regex": { "pattern": "Expiry date: (\\d{4}-\\d{2}-\\d{2})" } },
+          "controls": { "docx_section": { "heading": "Compensating Controls" } }
+        }
+      }]
+    }
+  ]
+}

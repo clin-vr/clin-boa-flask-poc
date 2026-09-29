@@ -1,0 +1,26 @@
+{
+  "control_id": "CTL-CLOUD-001",
+  "description": "AIT is approved for cloud deployment",
+  "policy": "cloud_approval",
+  "owner": "Cloud Platform Eng",
+  "params": { "ait_id": "AIT-12345" },
+  "layers": [
+    {
+      "name": "primary", "kind": "detective",
+      "sources": [{
+        "collector": "sharepoint",
+        "ref": {
+          "site": "/sites/compliance",
+          "folder": "/sites/compliance/Shared Documents/APS",
+          "name_pattern": "cloud-approvals-.*\\.xlsx",
+          "select": "newest"
+        },
+        "selectors": {
+          "approved": { "xlsx_row": { "sheet": "AITs", "match": { "Application ID": "${ait_id}" }, "column": "Approved for Cloud" } },
+          "as_of": { "xlsx_cell": { "sheet": "Info", "cell": "B2" } },
+          "modified": { "metadata": "modified_at" }
+        }
+      }]
+    }
+  ]
+}

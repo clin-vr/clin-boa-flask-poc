@@ -1,0 +1,38 @@
+{
+  "control_id": "CTL-CDS-001",
+  "description": "Code is approved by CDS before deployment",
+  "policy": "cds_code_approval",
+  "owner": "CDS",
+  "params": { "app_id": "AIT-12345", "version": "2.4.0" },
+  "layers": [
+    {
+      "name": "cataloged", "kind": "detective",
+      "sources": [{
+        "collector": "sharepoint",
+        "ref": {
+          "site": "/sites/cds",
+          "folder": "/sites/cds/Approvals",
+          "name_pattern": "${app_id}-${version}-approval\\.docx",
+          "select": "newest"
+        },
+        "selectors": {
+          "status": { "docx_section": { "heading": "Approval Status" } },
+          "approver": { "text_regex": { "pattern": "Approved by: (.+)" } },
+          "signed_on": { "text_regex": { "pattern": "Sign-off date: (\\d{4}-\\d{2}-\\d{2})" } }
+        }
+      }]
+    },
+    {
+      "name": "enforced", "kind": "preventive",
+      "sources": [{
+        "collector": "fixture",
+        "ref": { "path": "ci/deploy-${app_id}-${version}.json" },
+        "selectors": {
+          "gate_policy": { "json_path": "gate.policy_ref" },
+          "gate_result": { "json_path": "gate.result" },
+          "approval_uri": { "json_path": "gate.approval_uri" }
+        }
+      }]
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+{
+  "control_id": "CTL-FRESH-001",
+  "description": "Runbook is kept current and has an owner",
+  "policy": "freshness",
+  "owner": "Platform Operations",
+  "params": { "doc": "runbook.docx" },
+  "layers": [
+    {
+      "name": "primary", "kind": "detective",
+      "sources": [{
+        "collector": "sharepoint",
+        "ref": { "site": "/sites/compliance", "path": "/sites/compliance/Shared Documents/Runbooks/${doc}" },
+        "selectors": {
+          "modified": { "metadata": "modified_at" },
+          "owner_team": { "column": "Owner Team" }
+        }
+      }]
+    }
+  ]
+}
