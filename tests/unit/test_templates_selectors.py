@@ -6,7 +6,7 @@ import pytest
 
 from evidence_api import selectors
 from evidence_api.parsing import ParserRegistry
-from evidence_api.selectors import SelectorError, internal_column_name, needs_content
+from evidence_api.selectors import internal_column_name, needs_content
 from evidence_api.templates import TemplateError, TemplateNotFound, load_template, parse_template, resolve
 from generate_samples import generate
 
@@ -68,7 +68,7 @@ def test_invalid_layer_kind_rejected():
 def test_unknown_selector_rejected():
     body = json.loads((TEMPLATES / "CTL-FRESH-001.json").read_text())
     body["layers"][0]["sources"][0]["selectors"]["x"] = {"pdf_page": 1}
-    with pytest.raises(SelectorError):
+    with pytest.raises(TemplateError, match="pdf_page"):
         parse_template(body)
 
 

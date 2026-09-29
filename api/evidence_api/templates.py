@@ -9,7 +9,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
-from .selectors import validate_selectors
+from .selectors import SelectorError, validate_selectors
 
 CONTROL_ID = re.compile(r"^[A-Za-z0-9_-]+$")
 PLACEHOLDER = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)\}")
@@ -88,7 +88,10 @@ def validate(template: Template) -> None:
         for source in layer.sources:
             if not isinstance(source.ref, dict):
                 raise TemplateError(f"Layer {layer.name!r} has a source without a ref object")
-            validate_selectors(source.selectors)
+            try:
+                validate_selectors(source.selectors)
+            except SelectorError as exc:
+                raise TemplateError(str(exc)) from exc
 
 
 def load_template(templates_dir: Path | str, control_id: str) -> Template:
