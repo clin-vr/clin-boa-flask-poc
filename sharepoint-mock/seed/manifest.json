@@ -1,0 +1,173 @@
+{
+  "users": {
+    "janalyst": {"Id": 11, "Title": "J. Analyst", "Email": "j.analyst@example.test", "LoginName": "i:0#.w|corp\\janalyst"},
+    "kreviewer": {"Id": 12, "Title": "K. Reviewer", "Email": "k.reviewer@example.test", "LoginName": "i:0#.w|corp\\kreviewer"},
+    "cowner": {"Id": 13, "Title": "C. Owner", "Email": "c.owner@example.test", "LoginName": "i:0#.w|corp\\cowner"},
+    "aapprover": {"Id": 21, "Title": "A. Approver", "Email": "a.approver@example.test", "LoginName": "i:0#.w|corp\\aapprover"},
+    "bapprover": {"Id": 22, "Title": "B. Approver", "Email": "b.approver@example.test", "LoginName": "i:0#.w|corp\\bapprover"},
+    "zoutsider": {"Id": 31, "Title": "Z. Outsider", "Email": "z.outsider@example.test", "LoginName": "i:0#.w|corp\\zoutsider"}
+  },
+  "sites": {
+    "/sites/compliance": {
+      "owner_group": {"Title": "Compliance Owners", "members": ["cowner"]}
+    },
+    "/sites/cds": {
+      "owner_group": {"Title": "CDS Owners", "members": ["aapprover", "bapprover"]}
+    }
+  },
+  "files": [
+    {
+      "path": "/sites/compliance/Shared Documents/Runbooks/runbook.docx",
+      "created": "-200d", "modified": "-3d", "author": "janalyst", "modified_by": "kreviewer", "version": "4.0",
+      "list_fields": {"Owner_x0020_Team": "Platform Operations"},
+      "content": {"type": "docx", "blocks": [
+        {"heading": "Payments Gateway Runbook", "level": 1},
+        {"text": "Restart procedure for the payments gateway service."},
+        {"heading": "Escalation", "level": 2},
+        {"text": "Page the on-call engineer for Platform Operations."}
+      ]}
+    },
+    {
+      "path": "/sites/compliance/Shared Documents/Runbooks/stale-runbook.docx",
+      "created": "-400d", "modified": "-90d", "author": "janalyst", "modified_by": "janalyst", "version": "1.0",
+      "list_fields": {"Owner_x0020_Team": "Platform Operations"},
+      "content": {"type": "docx", "blocks": [
+        {"heading": "Legacy Batch Runbook", "level": 1},
+        {"text": "Restart procedure for the legacy batch scheduler."}
+      ]}
+    },
+    {
+      "path": "/sites/compliance/Shared Documents/APS/cloud-approvals-2026-06.xlsx",
+      "created": "-120d", "modified": "-95d", "author": "janalyst", "modified_by": "janalyst", "version": "2.0",
+      "list_fields": {"Owner_x0020_Team": "Cloud Platform Eng"},
+      "content": {"type": "xlsx", "sheets": {
+        "Info": [["Register", "Cloud approvals"], ["As of", "{date:-95d}"]],
+        "AITs": [
+          ["Application ID", "Application Name", "Approved for Cloud"],
+          ["AIT-12345", "Payments Gateway", "No"],
+          ["AIT-67890", "Ledger Batch", "No"]
+        ]
+      }}
+    },
+    {
+      "path": "/sites/compliance/Shared Documents/APS/cloud-approvals-2026-09.xlsx",
+      "created": "-30d", "modified": "-5d", "author": "janalyst", "modified_by": "kreviewer", "version": "3.0",
+      "list_fields": {"Owner_x0020_Team": "Cloud Platform Eng"},
+      "content": {"type": "xlsx", "sheets": {
+        "Info": [["Register", "Cloud approvals"], ["As of", "{date:-5d}"]],
+        "AITs": [
+          ["Application ID", "Application Name", "Approved for Cloud"],
+          ["AIT-12345", "Payments Gateway", "Yes"],
+          ["AIT-67890", "Ledger Batch", "No"]
+        ]
+      }}
+    },
+    {
+      "path": "/sites/cds/Approvals/AIT-12345-2.4.0-approval.docx",
+      "created": "-10d", "modified": "-7d", "author": "aapprover", "modified_by": "aapprover", "version": "1.0",
+      "list_fields": {"Owner_x0020_Team": "CDS"},
+      "content": {"type": "docx", "blocks": [
+        {"heading": "Code Approval: AIT-12345 2.4.0", "level": 1},
+        {"heading": "Approval Status", "level": 2},
+        {"text": "Approved for production deployment"},
+        {"heading": "Sign-off", "level": 2},
+        {"text": "Approved by: A. Approver"},
+        {"text": "Sign-off date: {date:-7d}"}
+      ]}
+    },
+    {
+      "path": "/sites/cds/Approvals/AIT-12345-2.5.0-approval.docx",
+      "created": "-6d", "modified": "-5d", "author": "zoutsider", "modified_by": "zoutsider", "version": "1.0",
+      "list_fields": {"Owner_x0020_Team": "CDS"},
+      "content": {"type": "docx", "blocks": [
+        {"heading": "Code Approval: AIT-12345 2.5.0", "level": 1},
+        {"heading": "Approval Status", "level": 2},
+        {"text": "Approved for production deployment"},
+        {"heading": "Sign-off", "level": 2},
+        {"text": "Approved by: Z. Outsider"},
+        {"text": "Sign-off date: {date:-5d}"}
+      ]}
+    },
+    {
+      "path": "/sites/cds/Approvals/AIT-12345-2.6.0-approval.docx",
+      "created": "-3d", "modified": "-2d", "author": "bapprover", "modified_by": "bapprover", "version": "1.0",
+      "list_fields": {"Owner_x0020_Team": "CDS"},
+      "content": {"type": "docx", "blocks": [
+        {"heading": "Code Approval: AIT-12345 2.6.0", "level": 1},
+        {"heading": "Approval Status", "level": 2},
+        {"text": "Approved for production deployment"},
+        {"heading": "Sign-off", "level": 2},
+        {"text": "Approved by: B. Approver"},
+        {"text": "Sign-off date: {date:-2d}"}
+      ]}
+    },
+    {
+      "path": "/sites/compliance/Shared Documents/Exceptions/EXC-001.docx",
+      "created": "-30d", "modified": "-20d", "author": "janalyst", "modified_by": "cowner", "version": "2.0",
+      "list_fields": {"Owner_x0020_Team": "Risk Office"},
+      "content": {"type": "docx", "blocks": [
+        {"heading": "Policy Exception EXC-001", "level": 1},
+        {"text": "Exception ID: EXC-001"},
+        {"text": "Expiry date: {date:+60d}"},
+        {"heading": "Compensating Controls", "level": 2},
+        {"text": "Weekly manual review of privileged access by the Risk Office."}
+      ]}
+    },
+    {
+      "path": "/sites/compliance/Shared Documents/Exceptions/EXC-002.docx",
+      "created": "-400d", "modified": "-100d", "author": "janalyst", "modified_by": "cowner", "version": "3.0",
+      "list_fields": {"Owner_x0020_Team": "Risk Office"},
+      "content": {"type": "docx", "blocks": [
+        {"heading": "Policy Exception EXC-002", "level": 1},
+        {"text": "Exception ID: EXC-002"},
+        {"text": "Expiry date: {date:-10d}"},
+        {"heading": "Compensating Controls", "level": 2},
+        {"text": "Quarterly vulnerability scan with manual triage."}
+      ]}
+    },
+    {
+      "path": "/sites/compliance/Shared Documents/Exceptions/EXC-003.docx",
+      "created": "-15d", "modified": "-10d", "author": "janalyst", "modified_by": "janalyst", "version": "1.0",
+      "list_fields": {"Owner_x0020_Team": "Risk Office"},
+      "content": {"type": "docx", "blocks": [
+        {"heading": "Policy Exception EXC-003", "level": 1},
+        {"text": "Exception ID: EXC-003"},
+        {"text": "Expiry date: {date:+60d}"},
+        {"heading": "Justification", "level": 2},
+        {"text": "Vendor patch pending."}
+      ]}
+    }
+  ],
+  "fixtures": [
+    {
+      "path": "ci/deploy-AIT-12345-2.4.0.json",
+      "body": {
+        "pipeline": "payments-gateway-deploy", "run_id": "run-1042", "status": "success",
+        "finished_at": "{ts:-6d}",
+        "gate": {"policy_ref": "https://git.example.test/cds/policies/blob/3f9c2e1/deploy_gate.rego",
+                 "result": "allow",
+                 "approval_uri": "{uri:/sites/cds/Approvals/AIT-12345-2.4.0-approval.docx}"}
+      }
+    },
+    {
+      "path": "ci/deploy-AIT-12345-2.5.0.json",
+      "body": {
+        "pipeline": "payments-gateway-deploy", "run_id": "run-1057", "status": "success",
+        "finished_at": "{ts:-4d}",
+        "gate": {"policy_ref": "https://git.example.test/cds/policies/blob/3f9c2e1/deploy_gate.rego",
+                 "result": "allow",
+                 "approval_uri": "{uri:/sites/cds/Approvals/AIT-12345-2.5.0-approval.docx}"}
+      }
+    },
+    {
+      "path": "ci/deploy-AIT-12345-2.6.0.json",
+      "body": {
+        "pipeline": "payments-gateway-deploy", "run_id": "run-1063", "status": "success",
+        "finished_at": "{ts:-1d}",
+        "gate": {"policy_ref": "https://git.example.test/cds/policies/blob/3f9c2e1/deploy_gate.rego",
+                 "result": "allow",
+                 "approval_uri": "{uri:/sites/cds/Approvals/AIT-12345-2.4.0-approval.docx}"}
+      }
+    }
+  ]
+}
