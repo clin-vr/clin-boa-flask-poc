@@ -1,6 +1,6 @@
 # clin-boa-flask-poc: Evidence Service (Flask + OPA + SharePoint)
 
-**Status: design agreed, not built yet.** This README is the design. Every section below describes what the POC will be.
+**Status: built and tested.** Tasks 1–21 of the build plan are done, and task 22 (format coverage) is deferred. [`docs/findings.md`](docs/findings.md) has what the POC showed, and [`docs/contract.md`](docs/contract.md) has the API and collector contract.
 
 A containerized Flask API that collects control evidence from SharePoint (and later Jira, Wiz, Splunk and AppHQ), extracts the values a control template asks for, and evaluates them against Rego policies in OPA.
 
@@ -18,6 +18,22 @@ It rebuilds Bayo's [`bofa-risk-observability-engine-poc`](https://github.com/Ver
 - **Reused:** the SharePoint REST v1 client and the file parsers.
 - **Replaced:** its Python evaluator, which becomes OPA.
 - **Dropped:** the persistence layer.
+
+## Quick start
+
+```bash
+make venv          # Python 3.11 virtualenv with dev dependencies
+make up            # build and start evidence-api :8080, opa :8181, sharepoint-mock :8000
+
+curl -s -X POST localhost:8080/evaluate -H 'content-type: application/json' \
+  -d '{"control_id": "CTL-CDS-001", "params": {"version": "2.6.0"}}'
+
+make test-unit       # no services needed
+make test-opa        # opa fmt, check and test in the pinned image
+make test-component  # collectors against the running mock
+make test-e2e        # the sample matrix against the running stack
+make down
+```
 
 ## Where it fits (ROE)
 
@@ -93,7 +109,7 @@ Both endpoints return **200 for every verdict**, including `NON_COMPLIANT`, `IND
 | `POST /collect` | `{"control_id": "CTL-CLOUD-001"}` | The envelope, without `result` |
 | `POST /evaluate` | `{"control_id": "CTL-CLOUD-001"}` | The envelope, with `result` |
 | `POST /collect` or `/evaluate` (debug) | `{"url": "<sharepoint link>", "policy": "freshness", "selectors": {...}, "params": {...}}` | An ad-hoc run with no template and a single `primary` layer. `policy` is required only on `/evaluate`. The URL's host must be in `SHAREPOINT_ALLOWED_HOSTS` (default: the configured SharePoint host). Sharing links (`/:x:/r/…`, `Doc.aspx`) are rejected with 400. |
-| `GET /health` | | `{status, opa, sources}` |
+| `GET /health` | | `{status, opa, collectors}` |
 
 Add `?include_raw=true` to include the full parsed document (text, rows, sections) in `evidence[].raw`.
 
@@ -115,34 +131,35 @@ Add `?include_raw=true` to include the full parsed document (text, rows, section
     "findings": [
       { "layer": "primary", "check_id": "approved_for_cloud", "result": "PASS",   // PASS | FAIL | NOT_FOUND
         "expected": "Yes", "observed": "Yes",
-        "location": "sheet 'AITs', row 14, column 'Approved for Cloud'",
-        "excerpt": "AIT-12345 | Payments Gateway | Yes" }
+        "location": "sheet 'AITs', row 2, column 'Approved for Cloud'" }
     ]
   },
   "evidence": [                                // one entry per source, across all layers
     {
       "layer": "primary",
       "source": "sharepoint",
+      "found": true,                           // false when the evidence is absent
+      "error": null,                           // set only when the source couldn't be read
       "subject": {                             // shared across sources; every field nullable
         "id": "cloud-approvals-2026-09.xlsx",
-        "uri": "http://sharepoint-mock/sites/compliance/Shared Documents/APS/cloud-approvals-2026-09.xlsx",
+        "uri": "http://sharepoint-mock:8000/sites/compliance/Shared%20Documents/APS/cloud-approvals-2026-09.xlsx",
         "title": "cloud-approvals-2026-09.xlsx",
         "created_at": "2026-01-10T09:00:00Z",
         "modified_at": "2026-09-22T14:52:17Z",
         "modified_by": "K. Reviewer",
-        "text": null,                          // included only when a selector or check needs it
+        "text": null,                          // filled only with ?include_raw=true
         "owners": [
           { "value": "Cloud Platform Eng", "source": "template" },
           { "value": "Cloud Platform Eng", "source": "column:Owner Team" },
           { "value": "J. Analyst",         "source": "sp:Author" },
           { "value": "K. Reviewer",        "source": "sp:ModifiedBy" },
-          { "value": "Compliance Owners",  "source": "sp:AssociatedOwnerGroup" }
+          { "value": "C. Owner",           "source": "sp:AssociatedOwnerGroup" }   // one per group member
         ]
       },
       "values": {                              // one entry per template selector
         "approved": { "value": "Yes", "found": true,
-                      "location": "sheet 'AITs', row 14, column 'Approved for Cloud'" },
-        "as_of":    { "value": "2026-09-01", "found": true, "location": "sheet 'AITs', cell B2" }
+                      "location": "sheet 'AITs', row 2, column 'Approved for Cloud'" },
+        "as_of":    { "value": "2026-09-24", "found": true, "location": "sheet 'Info', cell B2" }
       },
       "raw": null                              // filled only with ?include_raw=true
     }
@@ -158,7 +175,7 @@ Add `?include_raw=true` to include the full parsed document (text, rows, section
 }
 ```
 
-`evidence[]` is the same structure the API sends to OPA as `input.evidence`, so the response shows exactly what the rules judged.
+`evidence[]` is the same structure the API sends to OPA as `input.evidence`, with `raw` set to `null`, so the response shows exactly what the rules judged.
 
 ## Control templates
 
@@ -177,7 +194,7 @@ A template is a JSON file, `templates/<control_id>.json`. It lists the evidence 
       "sources": [{
         "collector": "sharepoint",
         "ref": {
-          "site_url": "http://sharepoint-mock/sites/cds",
+          "site": "/sites/cds",
           "folder": "/sites/cds/Approvals",
           "name_pattern": "${app_id}-${version}-approval\\.docx",
           "select": "newest"
@@ -193,7 +210,7 @@ A template is a JSON file, `templates/<control_id>.json`. It lists the evidence 
       "name": "enforced", "kind": "preventive",
       "sources": [{
         "collector": "fixture",
-        "ref": { "path": "fixtures/ci/deploy-${app_id}-${version}.json" },
+        "ref": { "path": "ci/deploy-${app_id}-${version}.json" },
         "selectors": {
           "gate_policy":  { "json_path": "gate.policy_ref" },
           "gate_result":  { "json_path": "gate.result" },
@@ -205,7 +222,7 @@ A template is a JSON file, `templates/<control_id>.json`. It lists the evidence 
 }
 ```
 
-A `ref` points at an exact file (`"path"`) or at a folder plus a `name_pattern`, with `"select": "newest"` or `"first"`.
+A SharePoint `ref` names its server-relative `site` and points at an exact file (`"path"`) or at a folder plus a `name_pattern`, with `"select": "newest"` or `"first"`. The collector prefixes `SHAREPOINT_BASE_URL`, so templates carry no hostnames. A `fixture` ref's `path` is relative to `FIXTURES_DIR`.
 
 ### Selectors
 
@@ -225,7 +242,8 @@ A selector that finds nothing returns `{"found": false}`. OPA turns that into `N
 
 ```
 opa/
-├── checks/                     # one reusable check per file
+├── checks/                     # one reusable check per file, package evidence.checks
+│   ├── lib.rego                #   params, layer_evidence, value, finding, parse_time
 │   ├── exists.rego             #   the document was found
 │   ├── fresh.rego              #   subject.modified_at within params.within_days
 │   ├── value_equals.rego       #   values[k].value == expected
@@ -303,39 +321,49 @@ The mock implements these SharePoint Server REST v1 calls, with the same paths a
 
 Sample files are generated by `sharepoint-mock/generate_samples.py`, and their metadata is set in `sharepoint-mock/seed/manifest.json`.
 
-## Planned repo layout
+## Repo layout
 
 ```
 clin-boa-flask-poc/
 ├── docker-compose.yml
+├── Makefile
 ├── api/
 │   ├── Dockerfile
+│   ├── gunicorn.conf.py
 │   ├── requirements.txt
 │   └── evidence_api/
 │       ├── app.py             # routes
-│       ├── envelope.py        # response builder and revision hashes
-│       ├── evidence.py        # Evidence, Subject and Owner dataclasses
+│       ├── debug.py           # ad-hoc runs from a SharePoint link
+│       ├── envelope.py        # response builder and OPA input
+│       ├── evidence.py        # Evidence, Subject, Owner and Value dataclasses
 │       ├── templates.py       # template loader
 │       ├── selectors.py       # selector engine
 │       ├── opa_client.py
 │       ├── parsing.py         # ported from Bayo's repo
+│       ├── auth.py            # ported from Bayo's repo
 │       └── collectors/
 │           ├── base.py        # Collector interface
-│           ├── sharepoint.py  # ported REST v1 client, with the ModifiedBy expand fix
-│           ├── fixture.py     # reads fixtures/*.json for sources not integrated yet
-│           └── jira.py        # Krishna
+│           ├── sharepoint.py  # ported REST v1 client, with $expand=Author,ModifiedBy
+│           └── fixture.py     # reads fixtures/*.json for sources not integrated yet
 ├── templates/*.json
-├── fixtures/ci/*.json         # mocked pipeline OPA gate run logs
+├── fixtures/ci/               # generated gate run logs (gitignored)
 ├── opa/                       # see OPA layout above
 ├── sharepoint-mock/
 │   ├── Dockerfile
 │   ├── app.py
-│   ├── generate_samples.py
-│   └── seed/
+│   ├── generate_samples.py    # runs when the container starts
+│   └── seed/manifest.json
+├── scripts/
+│   ├── capture_examples.py    # refreshes the examples in docs/contract.md
+│   └── list_dependencies.py   # third-party imports for bank approval
 ├── tests/
+│   ├── golden/evidence.json   # reference Evidence shape
 │   ├── unit/
-│   └── e2e/                   # runs against the compose stack
-└── docs/contract.md           # the envelope and Evidence contract, shared with Jira
+│   ├── component/             # collectors against the running mock
+│   └── e2e/                   # the sample matrix against the running stack
+└── docs/
+    ├── contract.md            # the envelope and collector contract, shared with Jira
+    └── findings.md            # what the POC showed
 ```
 
 ## Defaults
@@ -364,12 +392,12 @@ clin-boa-flask-poc/
 - **Whether the pipeline gate will call `/evaluate` at deploy time**, or look up the approval some other way.
 - **What makes an approval "verified" at the bank.** The POC assumes: status is Approved, the approver is in the CDS group, and a sign-off date is set.
 - **The real CI system and log format**, which decides what a real collector would replace `fixture` with.
-- **Contract review with Krishna:** the `evidence[]` array, `layers`, the `subject` fields, and the finding format.
+- **Contract review with Krishna:** the `evidence[]` array, `layers`, the `subject` fields, and whether findings need an `excerpt`. See `docs/contract.md`.
 - **GIS and CDS conventions:** whether they already use Rego or input conventions worth copying.
 
 ## Build plan
 
-Each build task is followed by a test task. A task starts only when the tests it's blocked by have passed. After P0, P1 and P2 run in parallel, and P3 starts once the Evidence format is fixed (task 8).
+**Tasks 1–21 are complete, and task 22 is deferred.** Each build task is followed by a test task. A task starts only when the tests it's blocked by have passed. After P0, P1 and P2 run in parallel, and P3 starts once the Evidence format is fixed (task 8).
 
 | Phase | Produces | Verified by |
 |---|---|---|
