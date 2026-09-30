@@ -17,15 +17,18 @@ LAYER_KINDS = {"detective", "preventive"}
 
 
 class TemplateError(ValueError):
+    """Error for a template or request that is invalid or cannot be resolved."""
     pass
 
 
 class TemplateNotFound(LookupError):
+    """Error for a control_id with no template file."""
     pass
 
 
 @dataclass
 class Source:
+    """One place to collect evidence from: a collector name, its ref, and named selectors."""
     collector: str
     ref: dict[str, Any]
     selectors: dict[str, Any] = field(default_factory=dict)
@@ -33,6 +36,7 @@ class Source:
 
 @dataclass
 class Layer:
+    """A named detective or preventive layer of a control and its sources."""
     name: str
     kind: str
     sources: list[Source]
@@ -40,6 +44,7 @@ class Layer:
 
 @dataclass
 class Template:
+    """A control template: its policy, layers, default params, and content revision."""
     control_id: str
     policy: str
     layers: list[Layer]
@@ -50,6 +55,7 @@ class Template:
 
 
 def parse_template(body: dict[str, Any], revision: str | None = None) -> Template:
+    """Build a Template from a parsed JSON body; raise TemplateError when a field is missing or invalid."""
     try:
         layers = [
             Layer(
@@ -75,6 +81,7 @@ def parse_template(body: dict[str, Any], revision: str | None = None) -> Templat
 
 
 def validate(template: Template) -> None:
+    """Raise TemplateError unless layers exist, have unique names and known kinds, and have valid sources."""
     if not template.layers:
         raise TemplateError("Template has no layers")
     names = [layer.name for layer in template.layers]
@@ -95,6 +102,10 @@ def validate(template: Template) -> None:
 
 
 def load_template(templates_dir: Path | str, control_id: str) -> Template:
+    """Load and parse <templates_dir>/<control_id>.json, with revision set to the file's sha256.
+
+    Raises TemplateError for an invalid control_id or JSON, and TemplateNotFound when there is no file.
+    """
     if not CONTROL_ID.match(control_id):
         raise TemplateError(f"Invalid control_id {control_id!r}")
     path = Path(templates_dir) / f"{control_id}.json"
@@ -109,6 +120,7 @@ def load_template(templates_dir: Path | str, control_id: str) -> Template:
 
 
 def substitute(value: Any, params: dict[str, Any]) -> Any:
+    """Return value with every ${name} placeholder in its strings replaced from params, recursively."""
     if isinstance(value, dict):
         return {k: substitute(v, params) for k, v in value.items()}
     if isinstance(value, list):
@@ -117,6 +129,7 @@ def substitute(value: Any, params: dict[str, Any]) -> Any:
         return value
 
     def replace_one(match: re.Match) -> str:
+        """Return the param value for one placeholder match; raise TemplateError when the param is missing."""
         name = match.group(1)
         if name not in params:
             raise TemplateError(f"Missing param {name!r}")
@@ -126,6 +139,7 @@ def substitute(value: Any, params: dict[str, Any]) -> Any:
 
 
 def resolve(template: Template, request_params: dict[str, Any] | None = None) -> Template:
+    """Return a copy of the template with request params merged over its defaults and filled into sources."""
     params = {**template.params, **(request_params or {})}
     layers = [
         Layer(layer.name, layer.kind,

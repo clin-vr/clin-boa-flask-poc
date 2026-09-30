@@ -44,6 +44,8 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class Section:
+    """A DOCX heading with its level and the body text beneath it."""
+
     heading: str
     level: int
     text: str
@@ -73,14 +75,17 @@ class ParsedDocument:
     parser: str = "unknown"
 
     def to_dict(self) -> dict[str, Any]:
+        """Return the document as a plain dict, with sections converted to dicts."""
         return asdict(self)
 
 
 class ParseError(RuntimeError):
+    """Raised when a document cannot be parsed."""
     pass
 
 
 class UnsupportedFormat(ParseError):
+    """Raised when no parser can read the requested format."""
     pass
 
 
@@ -90,18 +95,25 @@ class ScannedDocumentError(ParseError):
 
 
 class DocumentParser(ABC):
+    """Base class for format parsers, matched to files by their `extensions`."""
+
     extensions: tuple[str, ...] = ()
     name = "base"
 
     @abstractmethod
-    def parse(self, content: bytes) -> ParsedDocument: ...
+    def parse(self, content: bytes) -> ParsedDocument:
+        """Parse raw file bytes into a ParsedDocument."""
+        ...
 
 
 class PdfParser(DocumentParser):
+    """Parser for PDF files, one page of text per PDF page."""
+
     extensions = ("pdf",)
     name = "pdf"
 
     def parse(self, content: bytes) -> ParsedDocument:
+        """Parse a PDF, raising ScannedDocumentError when no page has extractable text."""
         pages = self._extract(content)
         text = "\n".join(pages)
         if not text.strip():
@@ -113,6 +125,7 @@ class PdfParser(DocumentParser):
 
     @staticmethod
     def _extract(content: bytes) -> list[str]:
+        """Return the text of each page, using pdfplumber if installed and pypdf otherwise."""
         try:
             import pdfplumber
 
@@ -130,10 +143,17 @@ class PdfParser(DocumentParser):
 
 
 class DocxParser(DocumentParser):
+    """Parser for DOCX files covering paragraphs, headings and table cells."""
+
     extensions = ("docx",)
     name = "docx"
 
     def parse(self, content: bytes) -> ParsedDocument:
+        """Parse a DOCX into text, heading sections and label/value fields.
+
+        Each section holds the text up to the next heading of the same or higher level.
+        Two-column table rows with a non-empty first cell become `fields` entries.
+        """
         try:
             import docx
         except ImportError as exc:
@@ -190,10 +210,13 @@ class DocxParser(DocumentParser):
 
 
 class LegacyDocParser(DocumentParser):
+    """Parser for legacy binary .doc files, which always refuses them."""
+
     extensions = ("doc",)
     name = "doc"
 
     def parse(self, content: bytes) -> ParsedDocument:
+        """Raise UnsupportedFormat, since .doc files cannot be read."""
         raise UnsupportedFormat(
             "Legacy .doc is not readable by python-docx. Conversion needs "
             "LibreOffice headless or antiword on the host — confirm whether "
@@ -202,10 +225,16 @@ class LegacyDocParser(DocumentParser):
 
 
 class XmlParser(DocumentParser):
+    """Parser for XML and InfoPath form data."""
+
     extensions = ("xml", "xsn")
     name = "xml"
 
     def parse(self, content: bytes) -> ParsedDocument:
+        """Parse XML into fields keyed by tag name and by slash-separated path.
+
+        Attributes appear as `path@name`; namespaces are dropped. Raises ParseError on malformed XML.
+        """
         try:
             root = ET.fromstring(content)
         except ET.ParseError as exc:
@@ -215,6 +244,7 @@ class XmlParser(DocumentParser):
         texts: list[str] = []
 
         def walk(element: ET.Element, path: str = "") -> None:
+            """Record the element's text and attributes in `fields`, then recurse into its children."""
             tag = element.tag.split("}")[-1]  # drop namespace
             here = f"{path}/{tag}" if path else tag
             value = (element.text or "").strip()
@@ -239,6 +269,7 @@ class CsvParser(DocumentParser):
     name = "csv"
 
     def parse(self, content: bytes) -> ParsedDocument:
+        """Parse delimited text into rows keyed by the header, sniffing the delimiter and stripping a BOM."""
         import csv
 
         text = content.decode("utf-8-sig", errors="replace")
@@ -271,10 +302,12 @@ class ExcelParser(DocumentParser):
     name = "xlsx"
 
     def __init__(self, sheet: str | None = None, max_cells: int = 200_000) -> None:
+        """Set the primary sheet (the first sheet when None) and the per-sheet cell limit."""
         self.sheet = sheet
         self.max_cells = max_cells
 
     def parse(self, content: bytes) -> ParsedDocument:
+        """Parse every sheet of a workbook; `rows` and `fields` come from the primary sheet."""
         try:
             import openpyxl
         except ImportError as exc:
@@ -306,6 +339,10 @@ class ExcelParser(DocumentParser):
             workbook.close()
 
     def _read_sheet(self, worksheet: Any) -> dict[str, Any]:
+        """Return a sheet's header-keyed rows and A1-keyed cells as {"rows": [...], "cells": {...}}.
+
+        Blank rows are skipped, and reading stops with a warning once `max_cells` is exceeded.
+        """
         rows: list[dict[str, Any]] = []
         cells: dict[str, Any] = {}
         header: list[str] = []
@@ -335,6 +372,7 @@ class ExcelParser(DocumentParser):
 
 
 def _cell_text(value: Any) -> str:
+    """Return a cell value as stripped text, with dates in ISO format and None as an empty string."""
     from datetime import date, datetime as _dt
 
     if value is None:
@@ -345,10 +383,13 @@ def _cell_text(value: Any) -> str:
 
 
 class JsonParser(DocumentParser):
+    """Parser for JSON documents."""
+
     extensions = ("json",)
     name = "json"
 
     def parse(self, content: bytes) -> ParsedDocument:
+        """Parse JSON into `data`, with pretty-printed text; raises ParseError on malformed input."""
         try:
             data = json.loads(content.decode("utf-8-sig"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -358,7 +399,10 @@ class JsonParser(DocumentParser):
 
 
 class ParserRegistry:
+    """Lookup of document parsers by file extension."""
+
     def __init__(self, parsers: list[DocumentParser] | None = None) -> None:
+        """Use the given parsers, or one of each built-in parser when none are given."""
         self._parsers = parsers or [
             PdfParser(),
             DocxParser(),
@@ -370,6 +414,7 @@ class ParserRegistry:
         ]
 
     def for_extension(self, extension: str) -> DocumentParser:
+        """Return the first parser that handles the extension, or raise UnsupportedFormat."""
         ext = extension.lower().lstrip(".")
         for parser in self._parsers:
             if ext in parser.extensions:
@@ -377,4 +422,5 @@ class ParserRegistry:
         raise UnsupportedFormat(f"No parser registered for {ext!r}")
 
     def parse(self, content: bytes, extension: str) -> ParsedDocument:
+        """Parse the content with the parser registered for the extension."""
         return self.for_extension(extension).parse(content)

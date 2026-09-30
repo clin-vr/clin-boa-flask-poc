@@ -13,13 +13,20 @@ from .base import Collector
 
 
 class FixtureCollector(Collector):
+    """Collector that reads JSON fixture files from a directory."""
+
     name = "fixture"
 
     def __init__(self, fixtures_dir: Path | str) -> None:
+        """Store the fixtures directory as an absolute path."""
         self.root = Path(fixtures_dir).resolve()
 
     def collect(self, layer: str, ref: dict[str, Any], selectors: dict[str, Any], *,
                 owner: str | None = None, include_raw: bool = False) -> Evidence:
+        """Read the JSON file at ref["path"] under the fixtures directory and apply the selectors.
+
+        A missing file gives found=False, a path outside the directory or an OSError gives error set,
+        and invalid JSON gives found=True with every value marked unreadable."""
         path = (self.root / ref["path"]).resolve()
         if not path.is_relative_to(self.root):
             return self.unreachable(layer, ValueError(f"Fixture path {ref['path']!r} escapes the fixtures directory"))
@@ -45,8 +52,10 @@ class FixtureCollector(Collector):
 
 
 def config_defaults() -> dict[str, Any]:
+    """Return FIXTURES_DIR from the environment, defaulting to "fixtures"."""
     return {"FIXTURES_DIR": os.environ.get("FIXTURES_DIR", "fixtures")}
 
 
 def from_config(config: dict[str, Any]) -> FixtureCollector:
+    """Build a FixtureCollector for the configured FIXTURES_DIR."""
     return FixtureCollector(config["FIXTURES_DIR"])

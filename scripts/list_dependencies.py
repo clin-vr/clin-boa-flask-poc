@@ -49,10 +49,12 @@ LOCAL_MODULES = {"evidence_api", "generate_samples", "app", "conftest"}
 
 
 def top_level(name: str) -> str:
+    """Return the top-level package of a dotted module name."""
     return name.split(".")[0]
 
 
 def imports_in(path: Path) -> set[str]:
+    """Return the top-level modules imported anywhere in a file, skipping relative imports."""
     tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
     found: set[str] = set()
     for node in ast.walk(tree):
@@ -65,6 +67,10 @@ def imports_in(path: Path) -> set[str]:
 
 
 def main() -> int:
+    """Print the third-party imports under api/ and sharepoint-mock/, with the files that use them.
+
+    Returns 1 when an import has no mapped distribution, otherwise 0.
+    """
     parser = argparse.ArgumentParser()
     parser.add_argument("--include-tests", action="store_true")
     args = parser.parse_args()

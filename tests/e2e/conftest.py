@@ -1,3 +1,5 @@
+"""Shared e2e helpers and the session check that the compose stack (API, OPA, mock) is running."""
+
 import os
 import subprocess
 import time
@@ -12,6 +14,7 @@ MOCK = os.environ.get("MOCK_URL", "http://localhost:8000")
 
 
 def wait_for(url, timeout=60):
+    """Poll a URL until it answers OK, or raise TimeoutError after the timeout."""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         try:
@@ -24,11 +27,13 @@ def wait_for(url, timeout=60):
 
 
 def compose(*args):
+    """Run a docker compose command in the repo root and fail on a non-zero exit."""
     subprocess.run(["docker", "compose", *args], cwd=ROOT, check=True, capture_output=True)
 
 
 @pytest.fixture(scope="session", autouse=True)
 def stack():
+    """Fail the session unless the API is up and reports OPA as ok."""
     try:
         health = requests.get(f"{API}/health", timeout=3).json()
     except requests.RequestException as exc:
@@ -37,6 +42,7 @@ def stack():
 
 
 def call(route, body):
+    """POST a body to an API route, assert a 200, and return the JSON response."""
     response = requests.post(f"{API}/{route}", json=body, timeout=30)
     assert response.status_code == 200, response.text
     return response.json()

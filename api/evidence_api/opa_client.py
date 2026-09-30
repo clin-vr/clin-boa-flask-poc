@@ -1,3 +1,5 @@
+"""HTTP client for the OPA server that holds the evidence policies."""
+
 from __future__ import annotations
 
 import hashlib
@@ -7,11 +9,14 @@ import requests
 
 
 class OpaUnavailable(RuntimeError):
+    """Error raised when OPA cannot be reached or returns an error status."""
     pass
 
 
 class OpaClient:
+    """Client for OPA's data and policy APIs at one base URL."""
     def __init__(self, url: str, timeout: float = 5) -> None:
+        """Store the OPA base URL, without a trailing slash, and the request timeout."""
         self.url = url.rstrip("/")
         self.timeout = timeout
 
@@ -26,6 +31,7 @@ class OpaClient:
         return response.json().get("result")
 
     def policy_revision(self) -> str:
+        """Return a sha256 over all loaded policy modules; raise OpaUnavailable when OPA cannot be reached."""
         try:
             response = requests.get(f"{self.url}/v1/policies", timeout=self.timeout)
             response.raise_for_status()
@@ -37,6 +43,7 @@ class OpaClient:
         return "sha256:" + digest.hexdigest()
 
     def healthy(self) -> bool:
+        """Return whether OPA's /health endpoint answers OK within 2 seconds."""
         try:
             return requests.get(f"{self.url}/health", timeout=2).ok
         except requests.RequestException:

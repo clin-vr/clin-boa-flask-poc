@@ -1,3 +1,5 @@
+"""Base class for collectors, which turn one template source into one Evidence entry."""
+
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
@@ -11,6 +13,8 @@ class SourceUnreachable(RuntimeError):
 
 
 class Collector(ABC):
+    """A source that turns one template source reference into one Evidence entry."""
+
     name: str = "base"
 
     @abstractmethod
@@ -20,7 +24,9 @@ class Collector(ABC):
         the source is unreachable. Never raise for either case."""
 
     def principal(self) -> str:
+        """Return the identity reads execute as, "anonymous" unless a subclass overrides it."""
         return "anonymous"
 
     def unreachable(self, layer: str, exc: Exception) -> Evidence:
+        """Return Evidence for the layer with error set to the exception's type and message."""
         return Evidence(layer=layer, source=self.name, error=f"{type(exc).__name__}: {exc}")

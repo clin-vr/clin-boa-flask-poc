@@ -35,10 +35,12 @@ OWNER_COLUMN = "Owner Team"
 
 
 def file_uri(base_url: str, server_relative_path: str) -> str:
+    """Return the absolute URL of a server-relative path, percent-encoded except for slashes."""
     return base_url.rstrip("/") + quote(server_relative_path, safe="/")
 
 
 def _quote(path: str) -> str:
+    """Percent-encode a server-relative path for an OData string literal."""
     # Single quotes inside a server-relative URL must be doubled for OData.
     return quote(path.replace("'", "''"), safe="/")
 
@@ -54,14 +56,20 @@ def _unwrap(body: dict[str, Any]) -> Any:
 
 
 def _person(value: Any) -> str | None:
+    """Return a person field's Title, or None when it is missing or deferred."""
     return value.get("Title") if isinstance(value, dict) and "__deferred" not in value else None
 
 
 class SharePointCollector(Collector):
+    """Collector for documents on SharePoint Server on-prem over REST v1."""
+
     name = "sharepoint"
 
     def __init__(self, base_url: str, auth: AuthStrategy | None = None, *, timeout: float = 5,
                  session: Any = None, registry: ParserRegistry | None = None) -> None:
+        """Set up the HTTP session with auth and the JSON nometadata Accept header.
+
+        Without a given session, build one with a small connection pool and one retry on GETs."""
         self.base_url = base_url.rstrip("/")
         self.auth = auth or AnonymousAuth()
         self.timeout = timeout
@@ -79,9 +87,11 @@ class SharePointCollector(Collector):
         self.session = self.auth.apply(session)
 
     def principal(self) -> str:
+        """Return the identity the auth strategy reads as."""
         return self.auth.principal()
 
     def _get(self, url: str) -> Any | None:
+        """GET a URL and return the response, or None on 404; raise SourceUnreachable on other 4xx/5xx."""
         response = self.session.get(url, timeout=self.timeout)
         if response.status_code == 404:
             return None
@@ -90,13 +100,19 @@ class SharePointCollector(Collector):
         return response
 
     def _json(self, url: str) -> Any | None:
+        """GET a URL and return its unwrapped JSON body, or None on 404."""
         response = self._get(url)
         return None if response is None else _unwrap(response.json())
 
     def _file_url(self, site: str, path: str, suffix: str = "") -> str:
+        """Build the REST URL for a file in a site, with an optional sub-resource or query suffix."""
         return f"{self.base_url}{site}/_api/web/GetFileByServerRelativeUrl('{_quote(path)}'){suffix}"
 
     def _locate(self, ref: dict[str, Any]) -> str | None:
+        """Return the server-relative path of the referenced file, or None when no folder file matches.
+
+        A ref with "path" is returned as is; otherwise the folder's files are matched against name_pattern
+        and the newest by TimeLastModified, or the first by name when select is "first", is chosen."""
         if "path" in ref:
             return ref["path"]
         site, folder = ref["site"], ref["folder"]
@@ -113,6 +129,7 @@ class SharePointCollector(Collector):
 
     def collect(self, layer: str, ref: dict[str, Any], selectors: dict[str, Any], *,
                 owner: str | None = None, include_raw: bool = False) -> Evidence:
+        """Collect the referenced document, returning Evidence with error set on request failures."""
         try:
             return self._collect(layer, ref, selectors, owner, include_raw)
         except (requests.RequestException, SourceUnreachable) as exc:
@@ -120,6 +137,10 @@ class SharePointCollector(Collector):
 
     def _collect(self, layer: str, ref: dict[str, Any], selectors: dict[str, Any],
                  owner: str | None, include_raw: bool) -> Evidence:
+        """Read the document's properties, library columns, site owners and, if needed, content into Evidence.
+
+        Return found=False when no document is found; a parse failure marks unfound values unreadable.
+        Raise requests.RequestException or SourceUnreachable when SharePoint can't be read."""
         site = ref["site"]
         path = self._locate(ref)
         props = self._json(self._file_url(site, path, "?$expand=Author,ModifiedBy")) if path else None

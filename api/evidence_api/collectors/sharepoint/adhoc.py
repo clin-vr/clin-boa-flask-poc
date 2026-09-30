@@ -14,10 +14,15 @@ SITE = re.compile(r"^(/sites/[^/]+)(/.*)?$")
 
 
 class DebugError(TemplateError):
+    """Template error for an invalid ad-hoc link request."""
     pass
 
 
 def parse_link(url: str, allowed_hosts: set[str]) -> tuple[str, str]:
+    """Return the site and server-relative path of a direct SharePoint file or folder link.
+
+    Raise DebugError for non-http(s) URLs, hosts not in allowed_hosts, sharing links
+    and paths outside /sites/<site>/."""
     parsed = urlparse(url)
     if parsed.scheme not in ("http", "https") or not parsed.hostname:
         raise DebugError(f"url must be an http(s) SharePoint link, got {url!r}")
@@ -34,6 +39,10 @@ def parse_link(url: str, allowed_hosts: set[str]) -> tuple[str, str]:
 
 
 def build_template(body: dict[str, Any], allowed_hosts: set[str], require_policy: bool):
+    """Build a one-source DEBUG template from an ad-hoc request body, revisioned by a hash of its spec.
+
+    A folder link (last segment without a dot) needs name_pattern. Raise DebugError for a bad link,
+    a folder link without name_pattern, or a missing policy when require_policy is set."""
     policy = body.get("policy")
     if require_policy and not policy:
         raise DebugError("policy is required for /evaluate")

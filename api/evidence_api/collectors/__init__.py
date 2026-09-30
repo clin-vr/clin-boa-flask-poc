@@ -11,6 +11,7 @@ SOURCES = {"sharepoint": sharepoint, "fixture": fixture}
 
 
 def collector_config_defaults() -> dict[str, Any]:
+    """Merge the config defaults of every registered source into one dict."""
     defaults: dict[str, Any] = {}
     for source in SOURCES.values():
         defaults.update(source.config_defaults())
@@ -18,4 +19,5 @@ def collector_config_defaults() -> dict[str, Any]:
 
 
 def build_collectors(config: dict[str, Any]) -> dict[str, Collector]:
+    """Build one collector per registered source, keyed by source name."""
     return {name: source.from_config(config) for name, source in SOURCES.items()}

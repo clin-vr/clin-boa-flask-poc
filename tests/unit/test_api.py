@@ -1,3 +1,5 @@
+"""Unit tests for the Flask API routes using a fake collector and fake OPA; needs no services."""
+
 import json
 from pathlib import Path
 
@@ -14,12 +16,15 @@ DECISION = {"status": "COMPLIANT", "color": "green", "reason": "ok", "layers": [
 
 
 class FakeCollector(Collector):
+    """Collector that records its calls and returns canned evidence, an error, or an exception."""
     name = "sharepoint"
 
     def __init__(self, fail=None):
+        """Set the failure mode (None, 'error' or 'raise') and start an empty call log."""
         self.fail, self.calls = fail, []
 
     def collect(self, layer, ref, selectors, *, owner=None, include_raw=False):
+        """Record the call and return found evidence, unreachable evidence, or raise KeyError."""
         self.calls.append({"layer": layer, "ref": ref, "selectors": selectors, "include_raw": include_raw})
         if self.fail == "error":
             return self.unreachable(layer, RuntimeError("SharePoint returned 503"))
@@ -31,23 +36,29 @@ class FakeCollector(Collector):
 
 
 class FakeOpa:
+    """OPA client stand-in that returns a fixed decision and records its inputs."""
     def __init__(self, decision=DECISION, down=False):
+        """Set the decision to return, whether OPA is down, and an empty input log."""
         self.decision, self.down, self.inputs = decision, down, []
 
     def evaluate(self, policy, input_doc):
+        """Record the input and return the decision, or raise OpaUnavailable when down."""
         if self.down:
             raise OpaUnavailable("ConnectionError: refused")
         self.inputs.append((policy, input_doc))
         return self.decision
 
     def policy_revision(self):
+        """Return a fixed policy revision."""
         return "sha256:policy"
 
     def healthy(self):
+        """Return True unless OPA is marked down."""
         return not self.down
 
 
 def client(collector=None, opa=None):
+    """Build a test client wired to the given fake collector and OPA, and return it with the collector."""
     collector = collector or FakeCollector()
     app = create_app(
         {"TEMPLATES_DIR": str(ROOT / "templates"), "SHAREPOINT_ALLOWED_HOSTS": "sharepoint-mock",
@@ -59,38 +70,45 @@ def client(collector=None, opa=None):
 
 
 def post(c, route, body, query=""):
+    """POST a JSON body to a route with an optional query string."""
     return c.post(f"/{route}{query}", json=body)
 
 
 @pytest.mark.parametrize("body", [None, [], "text"])
 def test_non_object_body_is_400(body):
+    """A JSON body that is not an object gives 400."""
     c, _ = client()
     response = c.post("/evaluate", data=json.dumps(body), content_type="application/json")
     assert response.status_code == 400
 
 
 def test_body_without_control_or_url_is_400():
+    """A body with neither control_id nor url gives 400."""
     c, _ = client()
     assert post(c, "evaluate", {"params": {}}).status_code == 400
 
 
 def test_unknown_control_is_404():
+    """An unknown control_id gives 404 naming the control."""
     c, _ = client()
     response = post(c, "evaluate", {"control_id": "CTL-NOPE-001"})
     assert response.status_code == 404 and "CTL-NOPE-001" in response.get_json()["error"]
 
 
 def test_unknown_policy_is_404():
+    """A control whose policy OPA does not have gives 404."""
     c, _ = client(opa=FakeOpa(decision=None))
     assert post(c, "evaluate", {"control_id": "CTL-FRESH-001"}).status_code == 404
 
 
 def test_non_object_params_is_400():
+    """params that are not an object give 400."""
     c, _ = client()
     assert post(c, "evaluate", {"control_id": "CTL-FRESH-001", "params": [1]}).status_code == 400
 
 
 def test_evaluate_envelope_shape():
+    """Evaluate returns the envelope keys in order, the request, result, layers and meta."""
     c, _ = client()
     body = post(c, "evaluate", {"control_id": "CTL-CDS-001", "params": {"version": "2.5.0"}}).get_json()
     assert list(body) == ["schema_version", "request", "result", "evidence", "meta"]
@@ -105,6 +123,7 @@ def test_evaluate_envelope_shape():
 
 
 def test_collect_has_no_result_and_no_policy_revision():
+    """Collect returns no result and a null policy_revision."""
     c, _ = client()
     body = post(c, "collect", {"control_id": "CTL-FRESH-001"}).get_json()
     assert "result" not in body
@@ -112,6 +131,7 @@ def test_collect_has_no_result_and_no_policy_revision():
 
 
 def test_opa_input_carries_layers_params_and_no_raw():
+    """OPA input has the control layers and resolved params, and no raw."""
     opa = FakeOpa()
     c, _ = client(opa=opa)
     post(c, "evaluate", {"control_id": "CTL-CDS-001", "params": {"version": "2.6.0"}}, "?include_raw=true")
@@ -124,6 +144,7 @@ def test_opa_input_carries_layers_params_and_no_raw():
 
 
 def test_include_raw_toggles_raw():
+    """include_raw=true passes through to the collector and returns raw content."""
     c, collector = client()
     without = post(c, "collect", {"control_id": "CTL-FRESH-001"}).get_json()
     with_raw = post(c, "collect", {"control_id": "CTL-FRESH-001"}, "?include_raw=true").get_json()
@@ -133,6 +154,7 @@ def test_include_raw_toggles_raw():
 
 
 def test_source_error_is_200_with_error_evidence():
+    """A source error still gives 200, with the error on the evidence."""
     c, _ = client(collector=FakeCollector(fail="error"))
     response = post(c, "collect", {"control_id": "CTL-FRESH-001"})
     assert response.status_code == 200
@@ -140,6 +162,7 @@ def test_source_error_is_200_with_error_evidence():
 
 
 def test_collector_exception_becomes_error_evidence():
+    """An exception in a collector becomes error evidence in a 200."""
     c, _ = client(collector=FakeCollector(fail="raise"))
     response = post(c, "collect", {"control_id": "CTL-FRESH-001"})
     assert response.status_code == 200
@@ -147,6 +170,7 @@ def test_collector_exception_becomes_error_evidence():
 
 
 def test_opa_down_is_200_error_result():
+    """OPA being down gives 200 with a red ERROR result."""
     c, _ = client(opa=FakeOpa(down=True))
     response = post(c, "evaluate", {"control_id": "CTL-FRESH-001"})
     assert response.status_code == 200
@@ -156,6 +180,7 @@ def test_opa_down_is_200_error_result():
 
 
 def test_revisions_are_stable():
+    """The template revision is a sha256 value that does not change between calls."""
     c, _ = client()
     first = post(c, "evaluate", {"control_id": "CTL-CDS-001"}).get_json()["meta"]
     second = post(c, "evaluate", {"control_id": "CTL-CDS-001"}).get_json()["meta"]
@@ -168,6 +193,7 @@ FOLDER_LINK = "http://sharepoint-mock:8000/sites/compliance/Shared%20Documents/A
 
 
 def test_debug_file_link():
+    """A file link is turned into a site and path ref on the primary layer."""
     c, collector = client()
     response = post(c, "evaluate", {"url": FILE_LINK, "policy": "freshness"})
     assert response.status_code == 200
@@ -177,6 +203,7 @@ def test_debug_file_link():
 
 
 def test_debug_folder_link_needs_pattern():
+    """A folder link needs name_pattern and then selects the newest match."""
     c, collector = client()
     assert post(c, "collect", {"url": FOLDER_LINK}).status_code == 400
     ok = post(c, "collect", {"url": FOLDER_LINK, "name_pattern": r"cloud-approvals-.*\.xlsx",
@@ -191,6 +218,7 @@ def test_debug_folder_link_needs_pattern():
     "http://sharepoint-mock:8000/sites/compliance/_layouts/15/Doc.aspx",
 ])
 def test_debug_sharing_links_rejected(url):
+    """Sharing and _layouts links give 400 saying sharing links are not supported."""
     c, _ = client()
     response = post(c, "collect", {"url": url})
     assert response.status_code == 400 and "Sharing links" in response.get_json()["error"]
@@ -199,11 +227,13 @@ def test_debug_sharing_links_rejected(url):
 @pytest.mark.parametrize("url", ["http://evil.example/sites/compliance/a.docx", "file:///etc/passwd",
                                  "http://sharepoint-mock:8000/not-a-site/a.docx"])
 def test_debug_bad_links_rejected(url):
+    """Links to other hosts, other schemes or non-site paths give 400."""
     c, _ = client()
     assert post(c, "collect", {"url": url}).status_code == 400
 
 
 def test_debug_policy_required_only_on_evaluate():
+    """A link needs a policy on evaluate but not on collect."""
     c, _ = client()
     assert post(c, "collect", {"url": FILE_LINK}).status_code == 200
     response = post(c, "evaluate", {"url": FILE_LINK})
@@ -211,11 +241,13 @@ def test_debug_policy_required_only_on_evaluate():
 
 
 def test_debug_bad_selector_is_400():
+    """An unknown selector type on a link request gives 400."""
     c, _ = client()
     assert post(c, "collect", {"url": FILE_LINK, "selectors": {"x": {"pdf_page": 1}}}).status_code == 400
 
 
 def test_health_lists_collectors():
+    """Health reports OPA status and the sorted collector names."""
     c, _ = client(opa=FakeOpa(down=True))
     body = c.get("/health").get_json()
     assert body == {"status": "ok", "opa": "unreachable", "collectors": ["fixture", "sharepoint"]}

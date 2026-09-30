@@ -1,3 +1,5 @@
+"""Unit tests for the parsers and the evidence shape over generated samples; needs no services."""
+
 import json
 from datetime import datetime, timezone
 from pathlib import Path
@@ -14,16 +16,19 @@ GOLDEN = Path(__file__).parent.parent / "golden" / "evidence.json"
 
 @pytest.fixture(scope="module")
 def samples(tmp_path_factory):
+    """Generate the sample files and fixtures into a temp directory and return its root."""
     root = tmp_path_factory.mktemp("parse")
     generate(root / "files", root / "fixtures", "http://sharepoint-mock:8000", now=NOW)
     return root
 
 
 def parse(path: Path):
+    """Parse a file with the parser registry chosen by its extension."""
     return ParserRegistry().parse(path.read_bytes(), path.suffix)
 
 
 def test_xlsx_reads_every_sheet(samples):
+    """An xlsx parses into every sheet's rows and cells, with the first sheet as rows."""
     doc = parse(samples / "files/sites/compliance/Shared Documents/APS/cloud-approvals-2026-09.xlsx")
     assert doc.sheet_names == ["Info", "AITs"]
     assert doc.sheets["AITs"]["rows"][0] == {
@@ -34,6 +39,7 @@ def test_xlsx_reads_every_sheet(samples):
 
 
 def test_docx_sections_have_levels_and_nesting(samples):
+    """Docx sections carry heading levels, and a parent section holds its children's text."""
     doc = parse(samples / "files/sites/cds/Approvals/AIT-12345-2.4.0-approval.docx")
     by_heading = {s.heading: s for s in doc.sections}
     assert by_heading["Approval Status"].level == 2
@@ -46,17 +52,20 @@ def test_docx_sections_have_levels_and_nesting(samples):
 
 
 def test_docx_missing_section_is_absent(samples):
+    """A heading missing from the document has no section."""
     doc = parse(samples / "files/sites/compliance/Shared Documents/Exceptions/EXC-003.docx")
     assert "Compensating Controls" not in [s.heading for s in doc.sections]
 
 
 def test_json_fixture(samples):
+    """A JSON fixture parses into data with parser json."""
     doc = parse(samples / "fixtures/ci/deploy-AIT-12345-2.4.0.json")
     assert doc.data["gate"]["result"] == "allow"
     assert doc.parser == "json"
 
 
 def test_bad_json_and_unknown_extension():
+    """Bad JSON raises ParseError and an unknown extension raises UnsupportedFormat."""
     with pytest.raises(ParseError):
         ParserRegistry().parse(b"{nope", "json")
     with pytest.raises(UnsupportedFormat):
@@ -64,6 +73,7 @@ def test_bad_json_and_unknown_extension():
 
 
 def test_parsed_document_serialises(samples):
+    """A parsed document round-trips through JSON with its sections intact."""
     doc = parse(samples / "files/sites/compliance/Shared Documents/Runbooks/runbook.docx")
     body = json.loads(json.dumps(doc.to_dict()))
     assert body["sections"][0] == {"heading": "Payments Gateway Runbook", "level": 1,
@@ -72,6 +82,7 @@ def test_parsed_document_serialises(samples):
 
 
 def test_evidence_matches_golden_contract():
+    """Evidence serialises to exactly tests/golden/evidence.json."""
     evidence = Evidence(
         layer="primary", source="sharepoint", found=True,
         subject=Subject(
@@ -92,6 +103,7 @@ def test_evidence_matches_golden_contract():
 
 
 def test_empty_evidence_keeps_nulls():
+    """Empty evidence serialises with nulls, empty owners and empty values."""
     body = Evidence(layer="enforced", source="fixture").to_dict()
     assert body["found"] is False and body["error"] is None and body["raw"] is None
     assert all(body["subject"][k] is None for k in ("id", "uri", "title", "created_at", "modified_at", "modified_by", "text"))

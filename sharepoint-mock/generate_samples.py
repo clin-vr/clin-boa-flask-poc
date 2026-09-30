@@ -20,6 +20,7 @@ OFFSET = re.compile(r"^([+-]\d+)d$")
 
 
 def parse_offset(offset: str, now: datetime) -> datetime:
+    """Return `now` shifted by a day offset like '-3d' or '+60d'; raises ValueError otherwise."""
     match = OFFSET.match(offset)
     if not match:
         raise ValueError(f"Bad offset {offset!r}; expected like '-3d' or '+60d'")
@@ -27,10 +28,15 @@ def parse_offset(offset: str, now: datetime) -> datetime:
 
 
 def file_uri(base_url: str, server_relative_path: str) -> str:
+    """Return the absolute URL of a server-relative path, percent-encoding everything except slashes."""
     return base_url.rstrip("/") + quote(server_relative_path, safe="/")
 
 
 def resolve_tokens(value: Any, now: datetime, base_url: str) -> Any:
+    """Return the value with its date, ts and uri tokens resolved, recursing into dicts and lists.
+
+    {date:-3d} becomes an ISO date, {ts:-3d} a UTC timestamp and {uri:/path} an absolute file URL.
+    """
     if isinstance(value, dict):
         return {k: resolve_tokens(v, now, base_url) for k, v in value.items()}
     if isinstance(value, list):
@@ -39,6 +45,7 @@ def resolve_tokens(value: Any, now: datetime, base_url: str) -> Any:
         return value
 
     def replace(match: re.Match) -> str:
+        """Return the replacement text for one matched token."""
         kind, arg = match.groups()
         if kind == "uri":
             return file_uri(base_url, arg)
@@ -49,6 +56,7 @@ def resolve_tokens(value: Any, now: datetime, base_url: str) -> Any:
 
 
 def build_docx(blocks: list[dict]) -> Document:
+    """Build a Word document from heading and paragraph blocks."""
     document = Document()
     for block in blocks:
         if "heading" in block:
@@ -59,6 +67,7 @@ def build_docx(blocks: list[dict]) -> Document:
 
 
 def build_xlsx(sheets: dict[str, list[list[Any]]]) -> Workbook:
+    """Build a workbook with one sheet per entry, appending each row in order."""
     workbook = Workbook()
     workbook.remove(workbook.active)
     for name, rows in sheets.items():
@@ -69,11 +78,13 @@ def build_xlsx(sheets: dict[str, list[list[Any]]]) -> Workbook:
 
 
 def load_manifest(path: Path = MANIFEST) -> dict:
+    """Return the parsed seed manifest."""
     return json.loads(path.read_text(encoding="utf-8"))
 
 
 def generate(out_dir: Path, fixtures_dir: Path, base_url: str, now: datetime | None = None,
              manifest: dict | None = None) -> dict:
+    """Write every sample file and CI fixture from the manifest and return the manifest."""
     now = now or datetime.now(timezone.utc)
     manifest = manifest or load_manifest()
 
@@ -98,6 +109,7 @@ def generate(out_dir: Path, fixtures_dir: Path, base_url: str, now: datetime | N
 
 
 def main() -> None:
+    """Generate the samples and fixtures into the directories given on the command line."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=Path(os.environ.get("SAMPLES_DIR", "/data/files")))
     parser.add_argument("--fixtures", type=Path, default=Path(os.environ.get("FIXTURES_DIR", "/fixtures")))

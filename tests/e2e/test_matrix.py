@@ -1,3 +1,5 @@
+"""E2E tests of the sample matrix and API behaviour against the running compose stack."""
+
 import json
 import statistics
 import time
@@ -30,6 +32,7 @@ IDS = [f"{c}-{next(iter(p.values()))}" for c, p, _, _ in MATRIX]
 
 @pytest.mark.parametrize("control,params,status,failing_layer", MATRIX, ids=IDS)
 def test_evaluate(control, params, status, failing_layer):
+    """Each matrix row evaluates to its expected status, with only the named layer failing."""
     body = call("evaluate", {"control_id": control, "params": params})
     result = body["result"]
     assert result["status"] == status, result["reason"]
@@ -45,6 +48,7 @@ def test_evaluate(control, params, status, failing_layer):
 
 @pytest.mark.parametrize("control,params,status,failing_layer", MATRIX, ids=IDS)
 def test_collect(control, params, status, failing_layer):
+    """Collect returns error-free evidence with no result, no raw, and found matching the sample."""
     body = call("collect", {"control_id": control, "params": params})
     assert "result" not in body
     assert body["meta"]["policy_revision"] is None
@@ -57,23 +61,27 @@ def test_collect(control, params, status, failing_layer):
 
 
 def test_include_raw_returns_parsed_content():
+    """include_raw=true returns the parsed workbook and the list item fields."""
     raw = call("collect?include_raw=true", {"control_id": "CTL-CLOUD-001"})["evidence"][0]["raw"]
     assert raw["content"]["sheets"]["AITs"]["rows"][0]["Application ID"] == "AIT-12345"
     assert raw["list_fields"]["Owner_x0020_Team"] == "Cloud Platform Eng"
 
 
 def test_owners_come_from_every_source():
+    """Owners are gathered from the template, the column, author, editor and owner group."""
     body = call("collect", {"control_id": "CTL-CDS-001"})
     sources = {o["source"] for o in body["evidence"][0]["subject"]["owners"]}
     assert sources == {"template", "column:Owner Team", "sp:Author", "sp:ModifiedBy", "sp:AssociatedOwnerGroup"}
 
 
 def test_debug_link_evaluates():
+    """A direct SharePoint file link evaluates against a named policy."""
     url = "http://sharepoint-mock:8000/sites/compliance/Shared%20Documents/Runbooks/runbook.docx"
     assert call("evaluate", {"url": url, "policy": "freshness"})["result"]["status"] == "COMPLIANT"
 
 
 def test_latency_report():
+    """Twenty evaluations per control are written to reports/latency.json with p95 under 2s."""
     samples = {}
     for control in ("CTL-FRESH-001", "CTL-CLOUD-001", "CTL-CDS-001", "CTL-EXC-001"):
         timings = []
@@ -92,15 +100,18 @@ def test_latency_report():
 
 
 def test_rule_edit_hot_reloads():
+    """Editing opa/data/params.json changes the result, and restoring it changes it back."""
     params_file = ROOT / "opa" / "data" / "params.json"
     original = params_file.read_text()
     edited = json.loads(original)
     edited["evidence"]["params"]["freshness"]["within_days"] = 1
 
     def status():
+        """Return the current CTL-FRESH-001 status from the API."""
         return call("evaluate", {"control_id": "CTL-FRESH-001"})["result"]["status"]
 
     def wait_status(expected, timeout=20):
+        """Poll the status until it equals the expected one, returning False on timeout."""
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
             if status() == expected:
@@ -118,6 +129,7 @@ def test_rule_edit_hot_reloads():
 
 
 def test_unreachable_source_is_error():
+    """With the mock stopped, evaluate returns ERROR, red, and error evidence."""
     compose("stop", "sharepoint-mock")
     try:
         body = call("evaluate", {"control_id": "CTL-FRESH-001", "params": {"doc": "runbook.docx"}})

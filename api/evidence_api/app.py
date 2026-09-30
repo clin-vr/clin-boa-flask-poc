@@ -1,3 +1,5 @@
+"""Flask app for the evidence service: the /collect, /evaluate and /health endpoints."""
+
 import logging
 import os
 import time
@@ -15,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 def _default_config() -> dict:
+    """Return the default config: collector defaults plus OPA and template settings from the environment."""
     return {
         **collector_config_defaults(),
         "OPA_URL": os.environ.get("OPA_URL", "http://localhost:8181"),
@@ -26,6 +29,7 @@ def _default_config() -> dict:
 
 def create_app(config: dict | None = None, collectors: dict[str, Collector] | None = None,
                opa: OpaClient | None = None) -> Flask:
+    """Build the Flask app, using the given collectors and OPA client or building them from config."""
     app = Flask(__name__)
     app.json.sort_keys = False
     app.config.update(_default_config())
@@ -37,9 +41,14 @@ def create_app(config: dict | None = None, collectors: dict[str, Collector] | No
     executed_as = ", ".join(sorted({collector.principal() for collector in collectors.values()}))
 
     def bad_request(message: str, status: int = 400):
+        """Return a JSON error response with the given status."""
         return jsonify(error=message), status
 
     def template_for(body: dict, evaluate: bool):
+        """Load the control's template, or build an ad-hoc one from url, and resolve its params.
+
+        Raises TemplateNotFound or TemplateError, including when a source names an unknown collector.
+        """
         if "control_id" in body:
             template = load_template(app.config["TEMPLATES_DIR"], str(body["control_id"]))
         elif "url" in body:
@@ -57,6 +66,7 @@ def create_app(config: dict | None = None, collectors: dict[str, Collector] | No
         return resolved
 
     def gather(template, include_raw: bool) -> list[dict]:
+        """Collect evidence from every source; a source whose collector raises is reported as unreachable."""
         evidence = []
         for layer in template.layers:
             for source in layer.sources:
@@ -71,6 +81,11 @@ def create_app(config: dict | None = None, collectors: dict[str, Collector] | No
         return evidence
 
     def run(evaluate: bool):
+        """Handle a collect or evaluate request and return the envelope as a JSON response.
+
+        Returns 400 for a bad body or template and 404 for an unknown control or policy;
+        an unreachable OPA gives an ERROR result instead of failing the request.
+        """
         started = time.monotonic()
         body = request.get_json(silent=True)
         if not isinstance(body, dict):
@@ -101,14 +116,17 @@ def create_app(config: dict | None = None, collectors: dict[str, Collector] | No
 
     @app.post("/collect")
     def collect():
+        """Collect evidence for the requested control without a policy verdict."""
         return run(evaluate=False)
 
     @app.post("/evaluate")
     def evaluate():
+        """Collect evidence for the requested control and return OPA's verdict on it."""
         return run(evaluate=True)
 
     @app.get("/health")
     def health():
+        """Report service health, whether OPA is reachable, and the configured collector names."""
         return jsonify(status="ok", opa="ok" if opa.healthy() else "unreachable", collectors=sorted(collectors))
 
     return app

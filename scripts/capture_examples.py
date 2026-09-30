@@ -21,13 +21,16 @@ EXAMPLES = {
 
 
 def capture(route: str, body: dict) -> dict:
+    """Return the JSON response from POSTing the body to the given API route."""
     return requests.post(f"{API}/{route}", json=body, timeout=30).json()
 
 
 def main() -> None:
+    """Replace every example block in docs/contract.md with a freshly captured response."""
     text = DOC.read_text(encoding="utf-8")
 
     def replace(match: re.Match) -> str:
+        """Return the matched example block with its JSON replaced by a live response."""
         route, body = EXAMPLES[match["name"]]
         return match.group(1) + json.dumps(capture(route, body), indent=2) + match.group(4)
 
