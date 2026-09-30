@@ -22,11 +22,12 @@ import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from ..auth import AnonymousAuth, AuthStrategy
-from ..evidence import Evidence, Owner, Subject, Value
-from ..parsing import ParseError, ParserRegistry
-from ..selectors import apply, internal_column_name, needs_content
-from .base import Collector, SourceUnreachable
+from ...evidence import Evidence, Owner, Subject, Value
+from ...parsing import ParseError, ParserRegistry
+from ...selectors import apply, needs_content
+from ..base import Collector, SourceUnreachable
+from .auth import AnonymousAuth, AuthStrategy
+from .columns import internal_column_name
 
 logger = logging.getLogger(__name__)
 
@@ -163,7 +164,8 @@ class SharePointCollector(Collector):
             "modified_at": subject.modified_at, "modified_by": modified_by, "author": author,
             "version_label": props.get("UIVersionLabel"), "size_bytes": props.get("Length"),
         }
-        values = apply(selectors, document, metadata, list_fields)
+        values = apply(selectors, document, metadata, list_fields,
+                       metadata_location="sharepoint metadata", column_key=internal_column_name)
         if unreadable:
             values = {name: value if value.found else Value(None, False, unreadable) for name, value in values.items()}
 

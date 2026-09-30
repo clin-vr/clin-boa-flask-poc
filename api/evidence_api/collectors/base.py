@@ -19,5 +19,8 @@ class Collector(ABC):
         """Return Evidence with found=False when the evidence is absent, and error set when
         the source is unreachable. Never raise for either case."""
 
+    def principal(self) -> str:
+        return "anonymous"
+
     def unreachable(self, layer: str, exc: Exception) -> Evidence:
         return Evidence(layer=layer, source=self.name, error=f"{type(exc).__name__}: {exc}")

@@ -1,14 +1,13 @@
 import logging
 import os
 import time
-from urllib.parse import urlparse
 
 from flask import Flask, jsonify, request
 
-from . import debug, envelope
+from . import envelope
+from .collectors import build_collectors, collector_config_defaults, sharepoint
 from .collectors.base import Collector
-from .collectors.fixture import FixtureCollector
-from .collectors.sharepoint import SharePointCollector
+from .collectors.sharepoint import adhoc
 from .opa_client import OpaClient, OpaUnavailable
 from .templates import TemplateError, TemplateNotFound, load_template, resolve
 
@@ -16,13 +15,10 @@ logger = logging.getLogger(__name__)
 
 
 def _default_config() -> dict:
-    base_url = os.environ.get("SHAREPOINT_BASE_URL", "http://localhost:8000")
     return {
-        "SHAREPOINT_BASE_URL": base_url,
-        "SHAREPOINT_ALLOWED_HOSTS": os.environ.get("SHAREPOINT_ALLOWED_HOSTS", urlparse(base_url).hostname or ""),
+        **collector_config_defaults(),
         "OPA_URL": os.environ.get("OPA_URL", "http://localhost:8181"),
         "TEMPLATES_DIR": os.environ.get("TEMPLATES_DIR", "templates"),
-        "FIXTURES_DIR": os.environ.get("FIXTURES_DIR", "fixtures"),
         "COLLECTOR_TIMEOUT": float(os.environ.get("COLLECTOR_TIMEOUT", "5")),
         "OPA_TIMEOUT": float(os.environ.get("OPA_TIMEOUT", "5")),
     }
@@ -34,12 +30,11 @@ def create_app(config: dict | None = None, collectors: dict[str, Collector] | No
     app.json.sort_keys = False
     app.config.update(_default_config())
     app.config.update(config or {})
-    allowed_hosts = {h.strip() for h in app.config["SHAREPOINT_ALLOWED_HOSTS"].split(",") if h.strip()}
+    allowed_hosts = sharepoint.allowed_hosts(app.config)
 
-    sharepoint = SharePointCollector(app.config["SHAREPOINT_BASE_URL"], timeout=app.config["COLLECTOR_TIMEOUT"])
-    collectors = collectors or {"sharepoint": sharepoint, "fixture": FixtureCollector(app.config["FIXTURES_DIR"])}
+    collectors = collectors or build_collectors(app.config)
     opa = opa or OpaClient(app.config["OPA_URL"], timeout=app.config["OPA_TIMEOUT"])
-    executed_as = sharepoint.principal()
+    executed_as = ", ".join(sorted({collector.principal() for collector in collectors.values()}))
 
     def bad_request(message: str, status: int = 400):
         return jsonify(error=message), status
@@ -48,7 +43,7 @@ def create_app(config: dict | None = None, collectors: dict[str, Collector] | No
         if "control_id" in body:
             template = load_template(app.config["TEMPLATES_DIR"], str(body["control_id"]))
         elif "url" in body:
-            template = debug.build_template(body, allowed_hosts, require_policy=evaluate)
+            template = adhoc.build_template(body, allowed_hosts, require_policy=evaluate)
         else:
             raise TemplateError("Body needs control_id, or url for an ad-hoc run")
         params = body.get("params") or {}

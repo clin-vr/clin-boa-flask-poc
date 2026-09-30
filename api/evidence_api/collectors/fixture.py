@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -41,3 +42,11 @@ class FixtureCollector(Collector):
         return Evidence(layer=layer, source=self.name, found=True, subject=subject,
                         values=apply(selectors, document, {}, {}),
                         raw={"content": document.data} if include_raw else None)
+
+
+def config_defaults() -> dict[str, Any]:
+    return {"FIXTURES_DIR": os.environ.get("FIXTURES_DIR", "fixtures")}
+
+
+def from_config(config: dict[str, Any]) -> FixtureCollector:
+    return FixtureCollector(config["FIXTURES_DIR"])

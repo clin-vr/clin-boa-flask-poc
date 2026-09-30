@@ -8,7 +8,7 @@ import re
 from typing import Any
 from urllib.parse import unquote, urlparse
 
-from .templates import TemplateError, parse_template
+from ...templates import TemplateError, parse_template
 
 SITE = re.compile(r"^(/sites/[^/]+)(/.*)?$")
 

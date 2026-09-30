@@ -5,8 +5,9 @@ from pathlib import Path
 import pytest
 
 from evidence_api import selectors
+from evidence_api.collectors.sharepoint.columns import internal_column_name
 from evidence_api.parsing import ParserRegistry
-from evidence_api.selectors import internal_column_name, needs_content
+from evidence_api.selectors import needs_content
 from evidence_api.templates import TemplateError, TemplateNotFound, load_template, parse_template, resolve
 from generate_samples import generate
 
@@ -86,7 +87,8 @@ def test_needs_content():
 
 def test_column_internal_name():
     assert internal_column_name("Owner Team") == "Owner_x0020_Team"
-    values = selectors.apply({"t": {"column": "Owner Team"}}, None, {}, {"Owner_x0020_Team": "CDS"})
+    values = selectors.apply({"t": {"column": "Owner Team"}}, None, {}, {"Owner_x0020_Team": "CDS"},
+                             column_key=internal_column_name)
     assert (values["t"].value, values["t"].found) == ("CDS", True)
     assert values["t"].location == "column 'Owner Team' (Owner_x0020_Team)"
 

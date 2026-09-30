@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from typing import Any
 
 from .evidence import Value
@@ -37,26 +38,24 @@ def needs_content(selectors: dict[str, Any]) -> bool:
     return any(selector_type(spec) in CONTENT_SELECTORS for spec in selectors.values())
 
 
-def internal_column_name(display_name: str) -> str:
-    return "".join(ch if ch.isalnum() or ch == "_" else f"_x{ord(ch):04x}_" for ch in display_name)
-
-
 def apply(selectors: dict[str, Any], document: ParsedDocument | None, metadata: dict[str, Any],
-          list_fields: dict[str, Any]) -> dict[str, Value]:
-    return {name: _apply_one(spec, document, metadata, list_fields) for name, spec in selectors.items()}
+          fields: dict[str, Any], *, metadata_location: str = "metadata",
+          column_key: Callable[[str], str] | None = None) -> dict[str, Value]:
+    return {name: _apply_one(spec, document, metadata, fields, metadata_location, column_key)
+            for name, spec in selectors.items()}
 
 
 def _apply_one(spec: dict[str, Any], document: ParsedDocument | None, metadata: dict[str, Any],
-               list_fields: dict[str, Any]) -> Value:
+               fields: dict[str, Any], metadata_location: str, column_key: Callable[[str], str] | None) -> Value:
     kind = selector_type(spec)
     arg = spec[kind]
     if kind == "metadata":
         value = metadata.get(arg)
-        return Value(value, value is not None, "sharepoint metadata")
+        return Value(value, value is not None, metadata_location)
     if kind == "column":
-        internal = internal_column_name(arg)
-        value = list_fields.get(internal)
-        return Value(value, value is not None, f"column '{arg}' ({internal})")
+        key = column_key(arg) if column_key else arg
+        value = fields.get(key)
+        return Value(value, value is not None, f"column '{arg}' ({key})" if key != arg else f"column '{arg}'")
     if document is None:
         return Value(None, False, "document not read")
     return {

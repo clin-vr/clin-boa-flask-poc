@@ -333,18 +333,22 @@ clin-boa-flask-poc/
 │   ├── requirements.txt
 │   └── evidence_api/
 │       ├── app.py             # routes
-│       ├── debug.py           # ad-hoc runs from a SharePoint link
 │       ├── envelope.py        # response builder and OPA input
 │       ├── evidence.py        # Evidence, Subject, Owner and Value dataclasses
 │       ├── templates.py       # template loader
 │       ├── selectors.py       # selector engine
 │       ├── opa_client.py
 │       ├── parsing.py         # ported from Bayo's repo
-│       ├── auth.py            # ported from Bayo's repo
 │       └── collectors/
+│           ├── __init__.py    # registry: every source the service collects from
 │           ├── base.py        # Collector interface
-│           ├── sharepoint.py  # ported REST v1 client, with $expand=Author,ModifiedBy
-│           └── fixture.py     # reads fixtures/*.json for sources not integrated yet
+│           ├── fixture.py     # reads fixtures/*.json for sources not integrated yet
+│           └── sharepoint/    # everything SharePoint-specific
+│               ├── __init__.py    # config defaults and from_config()
+│               ├── collector.py   # ported REST v1 client, with $expand=Author,ModifiedBy
+│               ├── auth.py        # ported from Bayo's repo
+│               ├── columns.py     # display name to internal column name
+│               └── adhoc.py       # ad-hoc runs from a SharePoint link
 ├── templates/*.json
 ├── fixtures/ci/               # generated gate run logs (gitignored)
 ├── opa/                       # see OPA layout above

@@ -1,6 +1,6 @@
 # Evidence service contract
 
-This is the request and response contract of `evidence-api`, and the interface a new collector implements. It's written for adding the Jira collector (`collectors/jira.py`) to the same service. The examples at the end are captured from a running stack by `scripts/capture_examples.py`, and `tests/e2e/test_contract_examples.py` checks that they still match live responses.
+This is the request and response contract of `evidence-api`, and the interface a new collector implements. It's written for adding the Jira collector (`collectors/jira/`) to the same service. The examples at the end are captured from a running stack by `scripts/capture_examples.py`, and `tests/e2e/test_contract_examples.py` checks that they still match live responses.
 
 ## Endpoints
 
@@ -98,15 +98,16 @@ The API queries `POST /v1/data/evidence/policies/<policy>/decision`. Checks are 
 
 ## Adding a collector
 
-1. Subclass `evidence_api.collectors.base.Collector`, set `name`, and implement `collect(layer, ref, selectors, *, owner=None, include_raw=False) -> Evidence`.
-2. **Never raise** for absent evidence or an unreachable source:
+1. Create a package `collectors/<source>/`, following `collectors/sharepoint/`. Keep everything specific to the source in it: the client, auth and field names.
+2. Subclass `evidence_api.collectors.base.Collector`, set `name`, and implement `collect(layer, ref, selectors, *, owner=None, include_raw=False) -> Evidence`.
+3. **Never raise** for absent evidence or an unreachable source:
    - Absent: return `Evidence(found=False, values={name: Value(None, False, "<why>") ...})`.
    - Unreachable: return `self.unreachable(layer, exc)`.
    The route also catches unexpected exceptions and turns them into `error`.
-3. Fill the `subject` fields your source has, and leave the rest `None`. Add owners with a `source` tag of your own, such as `jira:Assignee`.
-4. Resolve selectors into `values`. Reuse `selectors.apply()` for document-shaped content, or add selector types for your source (for example `jira_field`) in `selectors.py`.
-5. Register the collector in `create_app()` (`app.py`). Templates then refer to it as `"collector": "jira"`.
-6. Limitation: one source per layer. `layer_evidence()` in Rego expects a single entry for each layer name.
+4. Fill the `subject` fields your source has, and leave the rest `None`. Add owners with a `source` tag of your own, such as `jira:Assignee`.
+5. Resolve selectors into `values`. Reuse `selectors.apply()` for document-shaped content, passing `metadata_location` and `column_key` for your source's metadata and field names, or add selector types for your source (for example `jira_field`) in `selectors.py`.
+6. In the package's `__init__.py`, provide `config_defaults()` (its env vars) and `from_config(config)`, and override `principal()` if the source authenticates. Then add the package to `SOURCES` in `collectors/__init__.py`. Templates then refer to it as `"collector": "jira"`.
+7. Limitation: one source per layer. `layer_evidence()` in Rego expects a single entry for each layer name.
 
 ## Open questions for Krishna
 
